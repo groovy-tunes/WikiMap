@@ -8,7 +8,7 @@ const client = new Wit({
 });
 
 var coordinates = [];
-function retrieveCoordinates(locations){
+function retrieveCoordinates(locations, fcn){
     async.each(locations, function(string, callback){
         var res = string.replace('/', '');
         res = res.split(' ').join('_');
@@ -31,16 +31,25 @@ function retrieveCoordinates(locations){
         if (err){
             console.log(err);
         }
-        console.log(coordinates);
+
+        var jsonResponse = 'coordinates : {';
+        i = 0;
+        while (i < coordinates.length - 1){
+            jsonResponse += '[' + coordinates[i][0] + ',' + coordinates[i][1] + '],';
+            i += 1;
+        }
+        jsonResponse += '[' + coordinates[i][0] + ',' + coordinates[i][1] + ']';
+        jsonResponse += '}';
+
+        fcn(jsonResponse);
     });
 }
 
-//TODO: proper scoping
 var targetLocations = [];
-function retrieveLocations(locations){
-    locationStrings = [];
+function retrieveLocations(locations, fcn){
+    var locationStrings = [];
     for (i = 0; i < locations.length; i += 15){
-        end = i + 15;
+        var end = i + 15;
         if (end > locations.length){
             end = locations.length;
         }
@@ -60,44 +69,40 @@ function retrieveLocations(locations){
     }, function(err){
         if (err){
             console.log(err);
+            return;
         }
 
-        retrieveCoordinates(targetLocations);
+        retrieveCoordinates(targetLocations, fcn);
     });
 }
 
-function retrievePlot(title){
-    //TODO: check if title is valid
-
+function retrievePlot(title, fcn){
     request('https://en.wikipedia.org/api/rest_v1/page/html/' + title, function(err, res){
         if (err){
             console.log('Error with Wikipedia API request');
-            //TODO: proper error handling
-            exit();
+            return;
         }
 
         //parse out just the plot
-        bIndex = res.body.indexOf('<h2 id="Plot">Plot</h2>');
+        var bIndex = res.body.indexOf('<h2 id="Plot">Plot</h2>');
         if (bIndex == -1){
             console.log('Error parsing Wikipedia page');
-            //TODO: proper error handling
-            exit();
+            return;
         }
 
         //find the next h2 tag to get just the plot
-        eIndex = - 1;
-        i = bIndex + 24;
+        var eIndex = - 1;
+        var i = bIndex + 24;
         while (i < res.body.length && eIndex == -1){
-            fourChars = res.body.substring(i, i + 4);
+            var fourChars = res.body.substring(i, i + 4);
             if (fourChars == '<h2 '){
                 eIndex = i;
             }
             i += 1;
         }
 
-        plot = res.body.substring(bIndex + 24, eIndex);
-
-        re = /<a[^>]*>([\s\S]*?)<\/a>/g;
+        var plot = res.body.substring(bIndex + 24, eIndex);
+        var re = /<a[^>]*>([\s\S]*?)<\/a>/g;
         var m;
         var locations = [];
         do {
@@ -107,20 +112,20 @@ function retrievePlot(title){
             }
         } while (m);
 
-        retrieveLocations(locations);
+        retrieveLocations(locations, fcn);
     });
 }
 
-retrievePlot('London_Has_Fallen');
-
 /*
+    Server Routes
+*/
+
 app.get('/', function(req, res){
-    request('https://en.wikipedia.org/api/rest_v1/page/html/Dog', function(req, res){
-        console.log(res.type);
+    retrievePlot('London_Has_Fallen', function(jsonResponse){
+        res.send(jsonResponse);
     });
 });
 
 app.listen(3000, function () {
   console.log('Listening on http://localhost:3000');
 });
-*/
