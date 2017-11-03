@@ -14,7 +14,7 @@ function retrieveCoordinates(locations, fcn){
         res = res.split(' ').join('_');
         request('https://en.wikipedia.org/w/api.php?action=query&format=json&prop=coordinates&titles=' + res, function(err, res){
             if (err){
-                console.log('Error with Wikipedia API request');
+                fcn('Error with Wikipedia API request');
                 callback(err);
             }
 
@@ -32,16 +32,21 @@ function retrieveCoordinates(locations, fcn){
             console.log(err);
         }
 
-        var jsonResponse = 'coordinates : {';
-        i = 0;
-        while (i < coordinates.length - 1){
-            jsonResponse += '[' + coordinates[i][0] + ',' + coordinates[i][1] + '],';
-            i += 1;
+        if (coordinates.length < 1){
+            fcn('coordinates: {}');
         }
-        jsonResponse += '[' + coordinates[i][0] + ',' + coordinates[i][1] + ']';
-        jsonResponse += '}';
+        else {
+            var jsonResponse = 'coordinates : {';
+            i = 0;
+            while (i < coordinates.length - 1){
+                jsonResponse += '[' + coordinates[i][0] + ',' + coordinates[i][1] + '],';
+                i += 1;
+            }
+            jsonResponse += '[' + coordinates[i][0] + ',' + coordinates[i][1] + ']';
+            jsonResponse += '}';
 
-        fcn(jsonResponse);
+            fcn(jsonResponse);
+        }
     });
 }
 
@@ -60,8 +65,10 @@ function retrieveLocations(locations, fcn){
         //append multiple links to same string to minimize API calls
         client.message(string, {})
         .then((data) => {
-            for (j = 0; j < data.entities.location.length; j++){
-                targetLocations.push(data.entities.location[j].value);
+            if (data.entities.location){
+                for (j = 0; j < data.entities.location.length; j++){
+                    targetLocations.push(data.entities.location[j].value);
+                }
             }
             callback();
         })
@@ -69,24 +76,30 @@ function retrieveLocations(locations, fcn){
     }, function(err){
         if (err){
             console.log(err);
+            fcn('Error with Wit.ai');
             return;
         }
 
-        retrieveCoordinates(targetLocations, fcn);
+        if (targetLocations.length >= 1){
+            retrieveCoordinates(targetLocations, fcn);
+        }
+        else{
+            fcn('coordinates: []');
+        }
     });
 }
 
 function retrievePlot(title, fcn){
     request('https://en.wikipedia.org/api/rest_v1/page/html/' + title, function(err, res){
         if (err){
-            console.log('Error with Wikipedia API request');
+            fcn('Invalid Wikipedia article');
             return;
         }
 
         //parse out just the plot
         var bIndex = res.body.indexOf('<h2 id="Plot">Plot</h2>');
         if (bIndex == -1){
-            console.log('Error parsing Wikipedia page');
+            fcn('Invalid Wikipedia article');
             return;
         }
 
@@ -122,6 +135,13 @@ function retrievePlot(title, fcn){
 
 app.get('/', function(req, res){
     retrievePlot('London_Has_Fallen', function(jsonResponse){
+        res.send(jsonResponse);
+    });
+});
+
+app.get('/:article', function(req, res){
+    console.log(req.params.article)
+    retrievePlot(req.params.article, function(jsonResponse){
         res.send(jsonResponse);
     });
 });
